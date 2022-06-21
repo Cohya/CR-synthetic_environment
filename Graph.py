@@ -15,7 +15,7 @@ def euclidean_distance(p1, p2):
     
    
 class Node(object):
-    def __init__(self,number, location, spectrum, max_lim_x, max_lim_y,master = None):
+    def __init__(self,number, location, spectrum, max_lim_x, max_lim_y,master = None, channel = 0):
         self.number = number
         self.master = master
         self.queue  = queue.Queue() # Holding the message
@@ -23,6 +23,8 @@ class Node(object):
         self.spectrum = spectrum
         self.max_lim_x = max_lim_x
         self.max_lim_y = max_lim_y
+        self.channel = channel
+        self.number_of_channels = self.spectrum.action_space
         
     def get_message(self):
         if self.queue.empty():
@@ -55,8 +57,13 @@ class Node(object):
             self.location_xy[1] = -self.max_lim_y
         
         
-    def sense_spectrum(self, channel):
-        return self.spectrum.current_spectrum[channel]
+    def sense_spectrum(self, channel, how_many = 0):
+        a = channel 
+        b = channel + how_many 
+        s = self.spectrum.sense([a,b])
+        vec = np.asarray([-1]*self.number_of_channels)
+        vec[a:b+1] = s
+        return vec
         
 class Graph(object):
     
@@ -88,8 +95,11 @@ class Graph(object):
             
     def update_connectionMatrix(self):
         for i in range(self.nVertices):
+            node_i = self.all_nodes[i]
             for j in range(i+1, self.nVertices):
-                if self.adjMatrix[i][j] < 1:
+                node_j = self.all_nodes[j]
+                if (self.adjMatrix[i][j] < 1 and node_i.channel == node_j.channel and 
+                node_i.spectrum.current_spectrum[node_i.channel] == 0 and node_j.spectrum.current_spectrum[node_j.channel] == 0) :
                     val  = 1
                 else:
                     val  = 0

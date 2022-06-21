@@ -10,12 +10,15 @@ class SingleSpectrum(object):
         self.info = {"spectrum" : self.current_spectrum}
    
     
-        
-    def step(self,action):
+      
+    def step(self,action, noise = False):
         # action is a touple(i mod N)
         # i --> sending massege 
         # j --> sense
-
+        if noise:
+            self.current_spectrum[action] = 1
+            return 
+        
         if self.current_spectrom[action] == 1 : # means there is a PU there or a noise 
             r = -1
             
@@ -33,4 +36,4 @@ class SingleSpectrum(object):
         a = int(interval[0])
         b = int(interval[1]+1)
         
-        return self.current_spectrom[a:b]
+        return self.current_spectrum[a:b]

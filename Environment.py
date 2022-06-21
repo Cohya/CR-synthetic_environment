@@ -27,45 +27,62 @@ def get_all_x_y(all_nodes):
     return x, y 
 
 
-def generateRandoNode(num,max_lim_x, max_lim_y):
+
+def generateRandoNode(num,num_of_channels ,max_lim_x, max_lim_y):
     min_lim_x = - max_lim_x
     min_lim_y = - max_lim_y
     x, y = [(max_lim_x-min_lim_x), (max_lim_y - min_lim_y)] * np.random.random(size = 2) + [min_lim_x, min_lim_y]
-    spectrum  = SingleSpectrum()
+    spectrum  = SingleSpectrum(number_of_channels=num_of_channels)
     node = Node(num, location = [x,y], spectrum=spectrum, max_lim_x = max_lim_x, max_lim_y = max_lim_y)
     return node
 
-def generate_list_of_nodes(num_of_nodes , max_lim_x, max_lim_y):
+def generate_list_of_nodes(num_of_nodes ,num_of_channels , max_lim_x, max_lim_y):
     all_nodes = []
     for i in range(num_of_nodes):
-        all_nodes.append(generateRandoNode(i, max_lim_x, max_lim_y))
+        all_nodes.append(generateRandoNode(i, num_of_channels ,max_lim_x, max_lim_y))
     return all_nodes
 
 
 class SimulatedEnv(object):
-    def __init__(self, num_of_nodes = 5, topology = Topology(func = func)):
+    def __init__(self, jammers, num_of_channels = 5, num_of_nodes = 5, topology = Topology(func = func)):
         self.topology = topology
         self.num_of_nodes = num_of_nodes
         self.max_lim_x = 5
         self.max_lim_y = 5
-        self.all_nodes = generate_list_of_nodes(num_of_nodes, 0.5,0.5)
+        self.all_nodes = generate_list_of_nodes(num_of_nodes,num_of_channels, 0.5,0.5)
         self.graph = Graph(all_nodes = self.all_nodes, topology= self.topology)
     
         self.whoSendMessage = 0 # round
-        self.image_active = False
-        # self.num_of_channels = 
-  
+        self.num_of_channels = num_of_channels
+        self.jammers = jammers
+        
+        self.info = {'Real_Spectrum': None, 
+                     'sensed_spectrum': None,
+                     'last_reward': None,
+                     'number_of_jammers:': len(self.jammers), 
+                     'number_of_channels': self.num_of_channels}
+        
+        self.full_mesh_connection = self.num_of_nodes*(self.num_of_nodes-1)/2
+        
+    def get_current_spectrum(self):
+        spectrum = []
+        for node in self.all_nodes:
+            spectrum.append(node.spectrum.current_spectrum)
+        return spectrum
+    
     def close_image(self):
         plt.close('all')
         self.image_active = False
         
     def imageOfGame(self):
+        self.graph.update_connectionMatrix()
         if self.image_active == False:
             X, Y = np.meshgrid(np.linspace(-self.max_lim_x, self.max_lim_x, 256), np.linspace(-self.max_lim_y, self.max_lim_y, 256))
             Z = self.topology.func(X,Y)
             self.levels = np.linspace(Z.min(), Z.max(), 7)
             self.figure, self.ax = plt.subplots(1)
             contourf_ = self.ax.contourf(X, Y, Z, levels=self.levels)
+            plt.title("Based xy euclidian distance")
             self.figure.colorbar(contourf_)
             self.d = {}
             for i in range(self.num_of_nodes):
@@ -80,7 +97,20 @@ class SimulatedEnv(object):
                     else:
                         line , = self.ax.plot(0,0, 'k' )
                         self.d[(i,j)] = line
-                        
+            
+            self.d_jammers = {}
+            count = 0
+            for j in self.jammers:
+                s1 = self.ax.scatter(j.location_xy[0],j.location_xy[1], color = 'r' ,s = 60, marker = 'o',facecolors="None" ,linewidth=2)
+                s2 = self.ax.scatter(j.location_xy[0],j.location_xy[1], color = 'r' ,s = 70, marker = 'x')
+                circle = plt.Circle((j.location_xy[0],j.location_xy[1]), j.radius, color='r',  alpha=0.1)
+                circle_line = self.ax.add_patch(circle)
+                self.d_jammers[(count, 'l1')] = s1
+                self.d_jammers[(count, 'l2')] = s2
+                self.d_jammers[(count, 'c1')] = circle
+                self.d_jammers[(count, 'cl')] = circle_line 
+                count += 1
+                
             self.image_active = True
             x, y = get_all_x_y(self.all_nodes)
             self.s = self.ax.scatter(x, y, c = 'r')
@@ -100,21 +130,118 @@ class SimulatedEnv(object):
                     else:
                         self.d[(i,j)].set_xdata(0)
                         self.d[(i,j)].set_ydata(0)
+                        
+                count = 0
+                for j in self.jammers:
+                    
+                    x,y = j.location_xy[0],j.location_xy[1]
+                    
+                    s1 = self.ax.scatter(x,y, color = 'r' ,s = 60, marker = 'o',facecolors="None" ,linewidth=2)
+                    s2 = self.ax.scatter(x,y, color = 'r' ,s = 70, marker = 'x')
+                    self.d_jammers[(count, 'l1')].remove() 
+                    self.d_jammers[(count, 'l2')].remove() #set_array([x,y])
+                    self.d_jammers[(count, 'l1')] = s1
+                    self.d_jammers[(count, 'l2')] = s2
+
+                    self.d_jammers[(count, 'c1')].center = (x,y)
+
+                    count += 1
             
             x1, y1 = get_all_x_y(self.all_nodes)
             self.s.remove()
             self.s = self.ax.scatter(x1, y1, c = 'r')
-        
+            
             self.figure.canvas.draw()
             self.figure.canvas.flush_events()
-            self.graph.moveNodes()
-    def step(self):
-       pass
+            
+            # for j in self.jammers:
+            #     j.move()
+            # for n in self.all_nodes:
+            #     n.move()
+            # self.graph.moveNodes()
+        
+    def euclidian_distance(self, node,jammer):
+        node_xyz = self.topology.get_location(node.location_xy)
+        jammer_xyz = self.topology.get_location(jammer.location_xy)
+        
+        dis = (node_xyz - jammer_xyz)**2
+        return np.sqrt(np.sum(dis)) 
+
+    def euclidian_distance_xy(self, node,jammer):
+        node_xy= node.location_xy
+        jammer_xy= jammer.location_xy
+        
+        dis = (node_xy - jammer_xy)**2
+        return np.sqrt(np.sum(dis)) 
    
+    def run_jammers(self):
+        for jammer in self.jammers:
+            action = jammer.get_action()
+            
+            for node in self.all_nodes:
+                # dis = self.euclidian_distance(node,jammer) # for xyz distance in 3D
+                dis = self.euclidian_distance_xy(node,jammer)
+                if dis < jammer.radius:
+                    node.spectrum.step(action, noise= True)
     
-    def init(self):
+    def clear_spectrum(self):
+        for node in self.all_nodes:
+            node.spectrum.current_spectrum = [0]*self.num_of_channels
+            
+    def sense_spectrum(self):
+        state = []
+        for node in self.all_nodes:
+            channel_to_sense = np.random.choice(self.num_of_channels)
+            s = node.sense_spectrum(channel_to_sense)
+            state.append(s)
+            
+        return np.asarray(state, dtype = np.int32)
+        
+        
+        
+    def step(self, action):
+       self.clear_spectrum()
+       self.run_jammers()
+       self.graph.update_connectionMatrix()
+       # c = self.communication_channel 
+       print("connection matrix", self.graph.connectionMatrix)
+       r = np.sum(self.graph.connectionMatrix)/(2*self.full_mesh_connection) #give a measure of connection  as radio of full mesh (in full mesh we have n-1 + n-2 + ...0 = (n-1)*n/2)
+       observation = self.sense_spectrum()
+       self.time_counter += 1
+       
+       self.info['Real_Spectrum'] = self.get_current_spectrum()
+       self.info['sensed_spectrum'] = observation
+       self.info['last_reward'] = r
+       
+       if self.time_counter >= 100:
+           done = True 
+       else:
+           done = False
+           
+       return observation, r, done, self.info  
+       # print(next_state)
+       
+       
+       
+    
+    def reset_jammers(self):
+        for j in self.jammers:
+            j.reset()
+      
+    
+    def reset(self):
+        self.reset_jammers()
         self.image_active = False
-        pass
+        self.time_counter = 0
+        
+        for node in self.all_nodes:
+            # we build the net on channel 0 
+            # in the future we can create a net builder function with somew search 
+            node.channel = 0
+            
+        self.graph.update_connectionMatrix()
+        self.communication_channel = 0
+            
 
     
     
@@ -132,67 +259,3 @@ class SimulatedEnv(object):
 
 
 
-
-
-
-# topology = Topology(func = func)
-# node1 = Node(0, location = [1,1])
-# node2 = Node(1, location= [2,2])
-# node3 = Node(2, location= [1.2,2])
-# all_nodes = [node1, node2, node3]
-# g = Graph(len(all_nodes),all_nodes , topology = topology)
-
-
-# X, Y = np.meshgrid(np.linspace(-3, 3, 256), np.linspace(-3, 3, 256))
-# Z = (1 - X/2 + X**5 + Y**3) * np.exp(-X**2 - Y**2)
-# levels = np.linspace(Z.min(), Z.max(), 7)
-
-# # plot
-# figure, ax = plt.subplots(1)
-
-# contourf_ = ax.contourf(X, Y, Z, levels=levels)
-# figure.colorbar(contourf_)
-# d = {}
-# for i in range(3):
-#     for j in range(i+1, 3):
-#         n1 = all_nodes[i]
-#         if g.connectionMatrix[i][j] == 1:
-#             n2 = all_nodes[j]
-#             x = [n1.location_xy[0], n2.location_xy[0]]
-#             y = [n1.location_xy[1], n2.location_xy[1]]
-#             line , = ax.plot(x,y, 'k' )
-#             d[(i,j)] = line
-#         else:
-#             line , = ax.plot(0,0, 'k' )
-#             d[(i,j)] = line
-            
-# print(d)
-# x, y = get_all_x_y(all_nodes)
-# s = ax.scatter(x, y, c = 'r')
-
-# import time
-# for i in range(50):
-    
-#     #figure.canvas.flush_events()
-#     for i in range(3):
-#         for j in range(i+1, 3):
-#             n1 = all_nodes[i]
-#             if g.connectionMatrix[i][j] == 1:
-#                 n2 = all_nodes[j]
-#                 x = [n1.location_xy[0], n2.location_xy[0]]
-#                 y = [n1.location_xy[1], n2.location_xy[1]]
-#                 d[(i,j)].set_xdata(x)
-#                 d[(i,j)].set_ydata(y)
-#             else:
-#                 d[(i,j)].set_xdata(0)
-#                 d[(i,j)].set_ydata(0)
-    
-#     x1, y1 = get_all_x_y(all_nodes)
-#     s.remove()
-#     s = ax.scatter(x1, y1, c = 'r')
-
-#     figure.canvas.draw()
-#     figure.canvas.flush_events()
-#     g.moveNodes()
-#     time.sleep(1)
-  
