@@ -44,13 +44,13 @@ def generate_list_of_nodes(num_of_nodes ,num_of_channels , max_lim_x, max_lim_y)
 
 
 class SimulatedEnv(object):
-    def __init__(self, jammers, num_of_channels = 5, num_of_nodes = 5, topology = Topology(func = func)):
+    def __init__(self, jammers, num_of_channels = 5, num_of_nodes = 5, topology = Topology(func = func), deliveryRate =0):
         self.topology = topology
         self.num_of_nodes = num_of_nodes
         self.max_lim_x = 5
         self.max_lim_y = 5
-        self.all_nodes = generate_list_of_nodes(num_of_nodes,num_of_channels, 0.5,0.5)
-        self.graph = Graph(all_nodes = self.all_nodes, topology= self.topology)
+        self.all_nodes = generate_list_of_nodes(num_of_nodes,num_of_channels,0.5,0.5)
+        self.graph = Graph(all_nodes = self.all_nodes, topology= self.topology, deliveryRate = deliveryRate )
     
         self.whoSendMessage = 0 # round
         self.num_of_channels = num_of_channels
@@ -88,11 +88,16 @@ class SimulatedEnv(object):
             for i in range(self.num_of_nodes):
                 for j in range(i+1, self.num_of_nodes):
                     n1 = self.all_nodes[i]
-                    if self.graph.connectionMatrix[i][j] == 1:
+                    if self.graph.connectionMatrix[i][j] > 0:
                         n2 = self.all_nodes[j]
                         x = [n1.location_xy[0], n2.location_xy[0]]
                         y = [n1.location_xy[1], n2.location_xy[1]]
-                        line , = self.ax.plot(x,y, 'k' )
+                        if self.graph.connectionMatrix[i][j] == 1:
+                            co_i = 'k'
+                        else:
+                            co_i = 'b'
+                            
+                        line , = self.ax.plot(x,y, color = co_i)
                         self.d[(i,j)] = line
                     else:
                         line , = self.ax.plot(0,0, 'k' )
@@ -121,12 +126,17 @@ class SimulatedEnv(object):
                 n1 = self.all_nodes[i]
                 for j in range(i+1, self.num_of_nodes):
                     
-                    if self.graph.connectionMatrix[i][j] == 1:
+                    if self.graph.connectionMatrix[i][j] > 0:
                         n2 = self.all_nodes[j]
                         x = [n1.location_xy[0], n2.location_xy[0]]
                         y = [n1.location_xy[1], n2.location_xy[1]]
                         self.d[(i,j)].set_xdata(x)
                         self.d[(i,j)].set_ydata(y)
+                        if self.graph.connectionMatrix[i][j] == 1:
+                            self.d[(i,j)].set_color('k')
+                        else:
+                        
+                            self.d[(i,j)].set_color('b')
                     else:
                         self.d[(i,j)].set_xdata(0)
                         self.d[(i,j)].set_ydata(0)
@@ -158,7 +168,7 @@ class SimulatedEnv(object):
             #     j.move()
             # for n in self.all_nodes:
             #     n.move()
-            # self.graph.moveNodes()
+            self.graph.moveNodes()
         
     def euclidian_distance(self, node,jammer):
         node_xyz = self.topology.get_location(node.location_xy)
@@ -205,7 +215,7 @@ class SimulatedEnv(object):
        self.graph.update_connectionMatrix()
        # c = self.communication_channel 
        print("connection matrix", self.graph.connectionMatrix)
-       r = np.sum(self.graph.connectionMatrix)/(2*self.full_mesh_connection) #give a measure of connection  as radio of full mesh (in full mesh we have n-1 + n-2 + ...0 = (n-1)*n/2)
+       r = np.sum(self.graph.connectionMatrix)/(2*self.full_mesh_connection) #give a measure of connection  as radio of full mesh (in full mesh we have n-1 + n-2 + ...1 = (n-1)*(n)/2)
        observation = self.sense_spectrum()
        self.time_counter += 1
        

@@ -7,11 +7,11 @@ plt.close('all')
 jammer_1 = Jammer(location_xy = [1,1], r = 3, frequency = 1, num_of_channels = 5)
 jammer_2 = Jammer(location_xy = [0.5,-1], r = 3, frequency = 1, num_of_channels = 5)
 
-env = SimulatedEnv(num_of_nodes=10,jammers = [jammer_1, jammer_2])
+env = SimulatedEnv(num_of_nodes=5,jammers = [jammer_1, jammer_2], deliveryRate = 4)
 env.reset()
-
+print(env.graph.adjMatrix)
 import time 
-for i in range(10):
+for i in range(500):
     
     obs, r,_,_ = env.step(0)
     print("reward:", r)
@@ -21,8 +21,10 @@ for i in range(10):
         
     print(np.asarray(env.get_current_spectrum()))
     # print(env.communication_channel)
-    time.sleep((1))
+    time.sleep((0.2))
     env.imageOfGame()
+    
+    
 # env.imageOfGame()
 # env.step()
 # 
