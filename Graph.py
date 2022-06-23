@@ -69,13 +69,22 @@ class Node(object):
             self.location_xy[1] = -self.max_lim_y
         
         
-    def sense_spectrum(self, channel, how_many = 0):
-        a = channel 
-        b = channel + how_many 
+    def sense_spectrum(self, channel_to_sense, how_many = 0):
+        a = channel_to_sense
+        b = channel_to_sense + how_many 
         s = self.spectrum.sense([a,b])
         vec = np.asarray([-1]*self.number_of_channels)
         vec[a:b+1] = s
+         # <-- if its channel is block he cannot send the message!!!!
+        if self.spectrum.current_spectrum[self.channel] == 1 and self.master == False:
+            vec = [None] * self.number_of_channels
+          
         return vec
+    
+    def apply_decision(self, decision):
+        # here we performe channel selection 
+        self.channel = decision        
+        
         
 class Graph(object):
     
@@ -93,6 +102,9 @@ class Graph(object):
         self.update_connectionMatrix()
         # self.update_messageConnectionMatrix()
         
+        for node in self.all_nodes:
+            if node.master == True:
+                self.master_node = node
         
     def moveNodes(self):
         for n in self.all_nodes:
@@ -182,7 +194,43 @@ class Graph(object):
             
             
         return distance[v2], path , direct_path
-    
+
+
+
+                    
+        
+    def addEdge(self, node1, node2):
+        v1 = node1.number
+        v2 = node2.number
+        
+        pointV1 = self.topology.get_location(node1.location_xy)
+        pointV2 = self.topology.get_location(node2.location_xy)
+        dis = euclidean_distance(pointV1, pointV2)
+        
+        if dis >= 1:
+            dis = sys.maxsize
+            
+        self.adjMatrix[v1][v2] = dis
+        self.adjMatrix[v2][v1] = dis
+        
+        
+    def distribute_master_decision(self,decision):
+        # In this case we implementing channel selection 
+        channel_of_master = self.master_node.channel # this is the channel the master distribute its message 
+        num_of_master = self.master_node.number
+        master_channel_is_free = self.master_node.spectrum.current_spectrum[channel_of_master] != 1 
+        for node in self.all_nodes:
+            if node.master == True:
+                node.apply_decision(decision)
+                
+            else:
+                # now, I check if the master and the node are on the same channel, and I am checking if non of them are block 
+                # if channel_of_master == node.channel and node.spectrum.current_spectrum[channel_of_master] == 0 and  master_channel_is_free:
+                #     node.apply_decision(decision)
+                if self.connectionMatrix[node.number][num_of_master] > 0:
+                     node.apply_decision(decision)
+                    
+        
     # def update_messageConnectionMatrix(self):
         
     #     for i in range(self.nVertices):
@@ -200,21 +248,3 @@ class Graph(object):
                 
     #             self.messageConnectionMatrix[i][j] = val
     #             self.messageConnectionMatrix[j][i] = val
-                    
-        
-    def addEdge(self, node1, node2):
-        v1 = node1.number
-        v2 = node2.number
-        
-        pointV1 = self.topology.get_location(node1.location_xy)
-        pointV2 = self.topology.get_location(node2.location_xy)
-        dis = euclidean_distance(pointV1, pointV2)
-        
-        if dis >= 1:
-            dis = sys.maxsize
-            
-        self.adjMatrix[v1][v2] = dis
-        self.adjMatrix[v2][v1] = dis
-        
-    
-

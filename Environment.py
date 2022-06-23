@@ -28,18 +28,24 @@ def get_all_x_y(all_nodes):
 
 
 
-def generateRandoNode(num,num_of_channels ,max_lim_x, max_lim_y):
+def generateRandoNode(num,num_of_channels ,max_lim_x, max_lim_y, master):
     min_lim_x = - max_lim_x
     min_lim_y = - max_lim_y
     x, y = [(max_lim_x-min_lim_x), (max_lim_y - min_lim_y)] * np.random.random(size = 2) + [min_lim_x, min_lim_y]
     spectrum  = SingleSpectrum(number_of_channels=num_of_channels)
-    node = Node(num, location = [x,y], spectrum=spectrum, max_lim_x = max_lim_x, max_lim_y = max_lim_y)
+    node = Node(num, location = [x,y], spectrum=spectrum, max_lim_x = max_lim_x, max_lim_y = max_lim_y, 
+                master=master)
     return node
 
 def generate_list_of_nodes(num_of_nodes ,num_of_channels , max_lim_x, max_lim_y):
     all_nodes = []
     for i in range(num_of_nodes):
-        all_nodes.append(generateRandoNode(i, num_of_channels ,max_lim_x, max_lim_y))
+        if i == 0 :
+            master = True 
+        else:
+            master = False
+            
+        all_nodes.append(generateRandoNode(i, num_of_channels ,max_lim_x, max_lim_y, master = master))
     return all_nodes
 
 
@@ -168,7 +174,14 @@ class SimulatedEnv(object):
             #     j.move()
             # for n in self.all_nodes:
             #     n.move()
-            self.graph.moveNodes()
+            
+    def move_jammers(self):
+        for j in self.jammers:
+            j.move()
+            
+    def move_nodes(self):
+        self.graph.moveNodes()
+        
         
     def euclidian_distance(self, node,jammer):
         node_xyz = self.topology.get_location(node.location_xy)
@@ -201,15 +214,24 @@ class SimulatedEnv(object):
     def sense_spectrum(self):
         state = []
         for node in self.all_nodes:
-            channel_to_sense = np.random.choice(self.num_of_channels)
-            s = node.sense_spectrum(channel_to_sense)
+            if self.graph.master_node.channel == node.channel:
+                channel_to_sense = np.random.choice(self.num_of_channels)
+                s = node.sense_spectrum(channel_to_sense)
+            else:
+                s = [None] * self.num_of_channels
+            
             state.append(s)
             
-        return np.asarray(state, dtype = np.int32)
+        return np.asarray(state)#, dtype = np.int32)
         
         
         
     def step(self, action):
+       # send all channel info from all nodes to the master 
+       
+        # distribute the master message to all graph 
+       self.graph.distribute_master_decision(action) 
+
        self.clear_spectrum()
        self.run_jammers()
        self.graph.update_connectionMatrix()
